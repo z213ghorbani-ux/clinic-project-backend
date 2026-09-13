@@ -6,6 +6,8 @@ use App\Models\Concerns\HasAuditLogs;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Appointment extends Model
 {
@@ -40,8 +42,14 @@ class Appointment extends Model
     {
         return $this->belongsTo(Service::class);
     }
-    public function invoice()
+
+    public function invoice(): HasOne
     {
         return $this->hasOne(Invoice::class);
+    }
+
+    public function auditLogs(): MorphMany
+    {
+        return $this->morphMany(AuditLog::class, 'auditable');
     }
 }

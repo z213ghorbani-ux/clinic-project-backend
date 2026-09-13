@@ -7,6 +7,9 @@ use App\Http\Controllers\PatientController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\Api\InvoiceController;
+use App\Http\Controllers\ArchiveController;
+use App\Http\Controllers\Api\ReportController;
+
 
 
 
@@ -47,10 +50,25 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('appointments', AppointmentController::class);
 
-    
+
     Route::apiResource('invoices', InvoiceController::class);
 
-    
 
 
+
+    Route::get('/archives', [ArchiveController::class, 'index']);
+    Route::get('/archives/{archive}', [ArchiveController::class, 'show']);
+    Route::delete('/archives/{archive}', [ArchiveController::class, 'destroy']);
+    Route::post('/archives/bulk-delete', [ArchiveController::class, 'bulkDelete']);
+    Route::get('/archives/{archive}/attachments/{index}', [ArchiveController::class, 'downloadAttachment']);
+
+    Route::get('/archives', [ArchiveController::class, 'index']);
+    Route::post('/archives', [ArchiveController::class, 'store']); // <-- اضافه شد
+    Route::get('/archives/{archive}', [ArchiveController::class, 'show']);
+    Route::delete('/archives/{archive}', [ArchiveController::class, 'destroy']);
+    Route::post('/archives/bulk-delete', [ArchiveController::class, 'bulkDelete']);
+    Route::get('/archives/{archive}/attachments/{index}', [ArchiveController::class, 'downloadAttachment']);
+
+    Route::get('/reports', [ReportController::class, 'index']);
+    Route::post('/reports/batch-delete', [ReportController::class, 'batchDelete']);
 });
