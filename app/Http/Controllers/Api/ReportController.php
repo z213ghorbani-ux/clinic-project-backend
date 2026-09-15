@@ -57,57 +57,45 @@ class ReportController extends Controller
         |--------------------------------------------------------------------------
         */
         $archives->getCollection()->transform(function ($archive) {
-            $formData = is_array($archive->form_data)
-                ? $archive->form_data
-                : [];
+            $formData = is_array($archive->form_data) ? $archive->form_data : [];
+            $attachments = is_array($archive->attachments) ? $archive->attachments : [];
 
-            $attachments = is_array($archive->attachments)
-                ? $archive->attachments
-                : [];
+            // استخراج اطلاعات بیمار از form_data با چند ساختار رایج
+            $patientName = $archive->patient_name
+                ?? $formData['patient_name']
+                ?? $formData['patient']['full_name']
+                ?? $formData['full_name']
+                ?? $formData['name']
+                ?? null;
+
+            $nationalCode = $archive->national_code
+                ?? $formData['national_code']
+                ?? $formData['patient']['national_code']
+                ?? null;
 
             $services = $formData['services'] ?? [];
 
             return [
                 'id' => $archive->id,
-
-                'patient' => [
-                    'id' => null,
-                    'full_name' => $archive->patient_name,
-                    'mobile' => $archive->mobile,
-                    'national_code' => $archive->national_code,
-                    'file_number' => $archive->file_number,
-                ],
-
-                'patient_name' => $archive->patient_name,
-                'national_code' => $archive->national_code,
+                'patient_name' => $patientName,
+                'national_code' => $nationalCode,
                 'file_number' => $archive->file_number,
                 'mobile' => $archive->mobile,
-
                 'doctor' => [
                     'id' => $archive->issued_by,
                     'name' => $archive->issued_by_name,
                 ],
-
-                'issued_by' => $archive->issued_by,
-                'issued_by_name' => $archive->issued_by_name,
-
-                'service' => $services,
-
                 'services' => $services,
-                'form_data' => $formData,
+                'form_data' => $formData,      // موقتاً کل دیتا را می‌فرستیم
                 'attachments' => $attachments,
-
-                'start_at' => $archive->issued_at,
                 'issued_at' => $archive->issued_at,
                 'created_at' => $archive->created_at,
-                'updated_at' => $archive->updated_at,
-
                 'status' => 'completed',
-
                 'invoice' => null,
                 'audit_logs' => [],
             ];
         });
+
 
         return response()->json([
             'status' => 'success',
