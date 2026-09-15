@@ -16,11 +16,6 @@ class ReportController extends Controller
 
         $query = Archive::query();
 
-        /*
-        |--------------------------------------------------------------------------
-        | جست‌وجو
-        |--------------------------------------------------------------------------
-        */
         if ($request->filled('search')) {
             $search = trim($request->search);
 
@@ -29,16 +24,10 @@ class ReportController extends Controller
                     ->orWhere('file_number', 'like', "%{$search}%")
                     ->orWhere('mobile', 'like', "%{$search}%")
                     ->orWhere('issued_by_name', 'like', "%{$search}%")
-                    ->orWhere('patient_name', 'like', "%{$search}%")
-                    ->orWhere('national_code', 'like', "%{$search}%");
+                    ->orWhere('form_data', 'like', "%{$search}%");
             });
         }
 
-        /*
-        |--------------------------------------------------------------------------
-        | فیلتر تاریخ
-        |--------------------------------------------------------------------------
-        */
         if ($request->filled('from_date')) {
             $query->whereDate('issued_at', '>=', $request->from_date);
         }
@@ -47,47 +36,61 @@ class ReportController extends Controller
             $query->whereDate('issued_at', '<=', $request->to_date);
         }
 
-        $archives = $query
-            ->latest('id')
-            ->paginate($perPage);
+        $archives = $query->latest('id')->paginate($perPage);
 
-        /*
-        |--------------------------------------------------------------------------
-        | تبدیل اطلاعات برای فرانت‌اند
-        |--------------------------------------------------------------------------
-        */
         $archives->getCollection()->transform(function ($archive) {
             $formData = is_array($archive->form_data) ? $archive->form_data : [];
             $attachments = is_array($archive->attachments) ? $archive->attachments : [];
 
-            // استخراج اطلاعات بیمار از form_data با چند ساختار رایج
+            // استخراج اطلاعات بیمار از چند ساختار رایج form_data
+            $patientData = $formData['patient'] ?? [];
+
             $patientName = $archive->patient_name
-                ?? $formData['patient_name']
-                ?? $formData['patient']['full_name']
-                ?? $formData['full_name']
-                ?? $formData['name']
-                ?? null;
+                ?? ($patientData['full_name'] ?? null)
+                ?? ($formData['patient_name'] ?? null)
+                ?? ($formData['full_name'] ?? null)
+                ?? ($formData['name'] ?? null);
 
             $nationalCode = $archive->national_code
-                ?? $formData['national_code']
-                ?? $formData['patient']['national_code']
-                ?? null;
+                ?? ($patientData['national_code'] ?? null)
+                ?? ($formData['national_code'] ?? null);
+
+            $patientFileNumber = $archive->file_number
+                ?? ($patientData['file_number'] ?? null);
+
+            $patientMobile = $archive->mobile
+                ?? ($patientData['mobile'] ?? null);
 
             $services = $formData['services'] ?? [];
 
             return [
                 'id' => $archive->id,
+
+                // ساختار قدیمی که فرانت‌اند استفاده می‌کند
+                'patient' => [
+                    'id' => $patientData['id'] ?? null,
+                    'full_name' => $patientName,
+                    'mobile' => $patientMobile,
+                    'national_code' => $nationalCode,
+                    'file_number' => $patientFileNumber,
+                ],
+
+                // کلیدهای تخت (برای سازگاری)
                 'patient_name' => $patientName,
                 'national_code' => $nationalCode,
-                'file_number' => $archive->file_number,
-                'mobile' => $archive->mobile,
+                'file_number' => $patientFileNumber,
+                'mobile' => $patientMobile,
+
                 'doctor' => [
                     'id' => $archive->issued_by,
                     'name' => $archive->issued_by_name,
                 ],
+
                 'services' => $services,
-                'form_data' => $formData,      // موقتاً کل دیتا را می‌فرستیم
+                'form_data' => $formData,
                 'attachments' => $attachments,
+
+                'start_at' => $archive->issued_at,
                 'issued_at' => $archive->issued_at,
                 'created_at' => $archive->created_at,
                 'status' => 'completed',
@@ -96,12 +99,12 @@ class ReportController extends Controller
             ];
         });
 
-
         return response()->json([
             'status' => 'success',
             'data' => $archives,
         ]);
     }
+
 
     public function batchDelete(Request $request)
     {
