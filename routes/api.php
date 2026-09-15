@@ -71,4 +71,5 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::get('/reports', [ReportController::class, 'index']);
     Route::post('/reports/batch-delete', [ReportController::class, 'batchDelete']);
+    
 });

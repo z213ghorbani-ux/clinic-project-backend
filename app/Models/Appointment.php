@@ -2,54 +2,46 @@
 
 namespace App\Models;
 
-use App\Models\Concerns\HasAuditLogs;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasOne;
-use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Appointment extends Model
 {
-    use HasFactory, HasAuditLogs;
-
     protected $fillable = [
-        'doctor_id',
         'patient_id',
+        'doctor_id',
         'service_id',
+        'invoice_id',
         'start_at',
-        'end_at',
         'status',
         'notes',
     ];
 
     protected $casts = [
         'start_at' => 'datetime',
-        'end_at' => 'datetime',
     ];
 
-    public function doctor(): BelongsTo
-    {
-        return $this->belongsTo(Doctor::class);
-    }
-
-    public function patient(): BelongsTo
+    public function patient()
     {
         return $this->belongsTo(Patient::class);
     }
 
-    public function service(): BelongsTo
+    public function doctor()
+    {
+        return $this->belongsTo(Doctor::class);
+    }
+
+    public function service()
     {
         return $this->belongsTo(Service::class);
     }
 
-    public function invoice(): HasOne
+    public function invoice()
     {
-        return $this->hasOne(Invoice::class);
+        return $this->hasOne(Invoice::class, 'appointment_id');
     }
 
-    public function auditLogs(): MorphMany
+    public function auditLogs()
     {
-        return $this->morphMany(AuditLog::class, 'auditable');
+        return $this->hasMany(AuditLog::class, 'appointment_id');
     }
 }

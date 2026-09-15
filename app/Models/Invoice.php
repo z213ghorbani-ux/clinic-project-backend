@@ -2,42 +2,32 @@
 
 namespace App\Models;
 
-use App\Models\Appointment;
-use App\Models\Patient;
-use App\Models\Concerns\HasAuditLogs;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Invoice extends Model
 {
-    use HasFactory, HasAuditLogs;
-
     protected $fillable = [
-        'appointment_id',
         'patient_id',
-        'amount',
+        'appointment_id',
+        'total_amount',
         'discount',
         'final_amount',
         'status',
-        'payment_method',
-        'paid_at',
-        'notes',
     ];
 
     protected $casts = [
-        'amount' => 'integer',
-        'discount' => 'integer',
-        'final_amount' => 'integer',
-        'paid_at' => 'datetime',
+        'total_amount' => 'decimal:2',
+        'discount' => 'decimal:2',
+        'final_amount' => 'decimal:2',
     ];
-
-    public function appointment()
-    {
-        return $this->belongsTo(Appointment::class);
-    }
 
     public function patient()
     {
         return $this->belongsTo(Patient::class);
+    }
+
+    public function appointment()
+    {
+        return $this->belongsTo(Appointment::class);
     }
 }

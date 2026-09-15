@@ -3,37 +3,30 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class AuditLog extends Model
 {
     protected $fillable = [
+        'appointment_id',
         'user_id',
-        'event',
-        'auditable_type',
-        'auditable_id',
+        'action',
+        'description',
         'old_values',
         'new_values',
-        'ip_address',
-        'user_agent',
     ];
 
-    protected function casts(): array
+    protected $casts = [
+        'old_values' => 'array',
+        'new_values' => 'array',
+    ];
+
+    public function appointment()
     {
-        return [
-            'old_values' => 'array',
-            'new_values' => 'array',
-        ];
+        return $this->belongsTo(Appointment::class);
     }
 
-    public function user(): BelongsTo
+    public function user()
     {
         return $this->belongsTo(User::class);
-    }
-
-    public function auditable(): MorphTo
-    {
-        return $this->morphTo();
     }
 }
