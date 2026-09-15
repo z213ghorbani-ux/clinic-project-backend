@@ -9,6 +9,8 @@ class Archive extends Model
 {
     use HasFactory;
 
+    protected $table = 'archives';
+
     protected $fillable = [
         'patient_name',
         'national_code',
