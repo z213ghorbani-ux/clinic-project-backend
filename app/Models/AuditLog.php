@@ -7,12 +7,14 @@ use Illuminate\Database\Eloquent\Model;
 class AuditLog extends Model
 {
     protected $fillable = [
-        'appointment_id',
         'user_id',
-        'action',
-        'description',
+        'event',
+        'auditable_type',
+        'auditable_id',
         'old_values',
         'new_values',
+        'ip_address',
+        'user_agent',
     ];
 
     protected $casts = [
@@ -20,9 +22,9 @@ class AuditLog extends Model
         'new_values' => 'array',
     ];
 
-    public function appointment()
+    public function auditable()
     {
-        return $this->belongsTo(Appointment::class);
+        return $this->morphTo();
     }
 
     public function user()
