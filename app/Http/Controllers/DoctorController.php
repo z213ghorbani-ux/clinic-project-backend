@@ -110,17 +110,50 @@ class DoctorController extends Controller
     /**
      * حذف پزشک
      */
-    public function destroy(Doctor $doctor)
+    public function destroy($id)
     {
-        if ($doctor->stamp_path && Storage::disk('public')->exists($doctor->stamp_path)) {
-            Storage::disk('public')->delete($doctor->stamp_path);
+        try {
+            $doctor = Doctor::find($id);
+
+            if (!$doctor) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'پزشک مورد نظر یافت نشد.'
+                ], 404);
+            }
+
+            DB::beginTransaction();
+
+            // حذف فایل مهر/امضا در صورت وجود
+            if (!empty($doctor->stamp_path)) {
+                $cleanPath = str_replace('/storage/', '', $doctor->stamp_path);
+                if (Storage::disk('public')->exists($cleanPath)) {
+                    Storage::disk('public')->delete($cleanPath);
+                }
+            }
+
+            // حذف رکورد پزشک
+            $doctor->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'پزشک با موفقیت حذف شد.'
+            ], 200);
+        } catch (\Illuminate\Database\QueryException $e) {
+            DB::rollBack();
+            // اگر به خاطر کلید خارجی در نوبت‌ها یا بایگانی نتوانست حذف کند
+            return response()->json([
+                'success' => false,
+                'message' => 'امکان حذف این پزشک به دلیل وجود پرونده یا نوبت‌های ثبت‌شده به نام ایشان وجود ندارد.'
+            ], 400);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'success' => false,
+                'message' => 'خطا در حذف پزشک: ' . $e->getMessage()
+            ], 500);
         }
-
-        $doctor->delete();
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'پزشک با موفقیت حذف شد.'
-        ]);
     }
 }
