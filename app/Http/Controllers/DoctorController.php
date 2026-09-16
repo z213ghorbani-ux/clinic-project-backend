@@ -39,29 +39,59 @@ class DoctorController extends Controller
     /**
      * ثبت پزشک جدید به همراه آپلود مهر
      */
+    
+
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'medical_council_code' => 'required|string|max:50|unique:doctors,medical_council_code',
-            'specialty' => 'nullable|string|max:255',
-            'mobile' => 'nullable|string|max:20',
-            'stamp' => 'nullable|image|mimes:jpeg,png,jpg|max:2048', // حداکثر ۲ مگابایت
-            'is_active' => 'boolean',
-        ]);
+        try {
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'specialty' => 'nullable|string|max:255',
+                'medical_code' => 'nullable|string|max:100',
+                'stamp' => 'nullable|file|mimes:jpeg,png,jpg,webp|max:4096',
+                'signature' => 'nullable|file|mimes:jpeg,png,jpg,webp|max:4096',
+            ]);
 
-        if ($request->hasFile('stamp')) {
-            $path = $request->file('stamp')->store('doctors/stamps', 'public');
-            $validated['stamp_path'] = $path;
+            $stampPath = null;
+
+            // دریافت فایل مهر از هر کلیدی که فرانت ارسال کرده باشد
+            $file = $request->file('stamp')
+                ?? $request->file('signature')
+                ?? $request->file('stamp_path')
+                ?? $request->file('stamp_image');
+
+            if ($file) {
+                // اطمینان از وجود پوشه در storage
+                $path = $file->store('doctors/stamps', 'public');
+                $stampPath = '/storage/' . $path;
+            }
+
+            $doctor = Doctor::create([
+                'name' => $request->input('name'),
+                'specialty' => $request->input('specialty'),
+                'medical_code' => $request->input('medical_code') ?? $request->input('medical_number'),
+                'stamp_path' => $stampPath,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'پزشک با موفقیت ثبت شد.',
+                'doctor' => $doctor,
+                'data' => $doctor
+            ], 201);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'داده‌های ارسالی نامعتبر است.',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            Log::error('Doctor store error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'خطا در ثبت پزشک: ' . $e->getMessage()
+            ], 500);
         }
-
-        $doctor = Doctor::create($validated);
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'پزشک با موفقیت ثبت شد.',
-            'data' => $doctor
-        ], 201);
     }
 
     /**
