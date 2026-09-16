@@ -42,60 +42,102 @@ class ReportController extends Controller
             $formData = is_array($archive->form_data) ? $archive->form_data : [];
             $attachments = is_array($archive->attachments) ? $archive->attachments : [];
 
-            // استخراج اطلاعات بیمار از چند ساختار رایج form_data
-            $patientData = $formData['patient'] ?? [];
+            // ۱. استخراج اطلاعات بیمار از داخل updatedQueue
+            $queueItem = $formData['invoiceDetails']['updatedQueue'][0] ?? [];
+            $patientFromQueue = $queueItem['patient'] ?? [];
 
-            $patientName = $archive->patient_name
-                ?? ($patientData['full_name'] ?? null)
-                ?? ($formData['patient_name'] ?? null)
-                ?? ($formData['full_name'] ?? null)
-                ?? ($formData['name'] ?? null);
+            $patientName = $patientFromQueue['full_name']
+                ?? $formData['patient_name']
+                ?? $formData['patient']['full_name']
+                ?? $formData['full_name']
+                ?? $formData['name']
+                ?? 'نامشخص';
 
-            $nationalCode = $archive->national_code
-                ?? ($patientData['national_code'] ?? null)
-                ?? ($formData['national_code'] ?? null);
+            $nationalCode = $patientFromQueue['national_code']
+                ?? $formData['national_code']
+                ?? $formData['patient']['national_code']
+                ?? $archive->file_number; // کد ملی معمولاً همان شماره پرونده یا مقدار ثبت‌شده است
 
-            $patientFileNumber = $archive->file_number
-                ?? ($patientData['file_number'] ?? null);
+            $mobile = $patientFromQueue['mobile']
+                ?? $archive->mobile
+                ?? $formData['mobile']
+                ?? '-';
 
-            $patientMobile = $archive->mobile
-                ?? ($patientData['mobile'] ?? null);
+            $fileNumber = $patientFromQueue['file_number']
+                ?? $archive->file_number
+                ?? '-';
 
+            // ۲. استخراج خدمات ثبت‌شده
             $services = $formData['services'] ?? [];
+            if (empty($services) && isset($formData['invoiceDetails']['updatedQueue'])) {
+                foreach ($formData['invoiceDetails']['updatedQueue'] as $q) {
+                    if (isset($q['services']) && is_array($q['services'])) {
+                        foreach ($q['services'] as $s) {
+                            $services[] = $s;
+                        }
+                    }
+                }
+            }
+
+            // ۳. پزشک معالج
+            $doctorData = $queueItem['doctor'] ?? [];
+            $doctorName = $archive->issued_by_name
+                ?? ($doctorData['name'] ?? null);
+
+            // ۴. اطلاعات فاکتور
+            $invoiceDetails = $formData['invoiceDetails'] ?? null;
+            $invoice = null;
+            if ($invoiceDetails || ($formData['hasInvoice'] ?? false)) {
+                $invoice = [
+                    'total_price' => $invoiceDetails['totalPrice'] ?? null,
+                    'discount' => $invoiceDetails['discount'] ?? 0,
+                    'payable_amount' => $invoiceDetails['payableAmount'] ?? null,
+                    'is_paid' => true,
+                    'payment_method' => 'cash',
+                ];
+            }
 
             return [
                 'id' => $archive->id,
 
-                // ساختار قدیمی که فرانت‌اند استفاده می‌کند
+                // ساختار آبجکت بیمار برای فرانت‌اند
                 'patient' => [
-                    'id' => $patientData['id'] ?? null,
+                    'id' => $patientFromQueue['id'] ?? null,
                     'full_name' => $patientName,
-                    'mobile' => $patientMobile,
                     'national_code' => $nationalCode,
-                    'file_number' => $patientFileNumber,
+                    'mobile' => $mobile,
+                    'file_number' => $fileNumber,
+                    'gender' => $patientFromQueue['gender'] ?? null,
+                    'birth_date' => $patientFromQueue['birth_date'] ?? null,
                 ],
 
-                // کلیدهای تخت (برای سازگاری)
+                // فیلدهای تخت (جهت اطمینان)
                 'patient_name' => $patientName,
                 'national_code' => $nationalCode,
-                'file_number' => $patientFileNumber,
-                'mobile' => $patientMobile,
+                'file_number' => $fileNumber,
+                'mobile' => $mobile,
 
+                // پزشک
                 'doctor' => [
-                    'id' => $archive->issued_by,
-                    'name' => $archive->issued_by_name,
+                    'id' => $archive->issued_by ?? ($doctorData['id'] ?? null),
+                    'name' => $doctorName,
+                    'specialty' => $doctorData['specialty'] ?? null,
                 ],
 
+                // خدمات و اقدامات
                 'services' => $services,
                 'form_data' => $formData,
                 'attachments' => $attachments,
 
-                'start_at' => $archive->issued_at,
-                'issued_at' => $archive->issued_at,
-                'created_at' => $archive->created_at,
+                // مالی و وضعیت
+                'invoice' => $invoice,
+                'has_invoice' => $formData['hasInvoice'] ?? false,
                 'status' => 'completed',
-                'invoice' => null,
                 'audit_logs' => [],
+
+                'start_at' => $archive->issued_at ?? $archive->created_at,
+                'issued_at' => $archive->issued_at ?? $archive->created_at,
+                'created_at' => $archive->created_at,
             ];
         });
 
@@ -105,53 +147,32 @@ class ReportController extends Controller
         ]);
     }
 
-
     public function batchDelete(Request $request)
     {
-        $validated = $request->validate([
-            'from_date' => ['required', 'date'],
-            'to_date' => ['required', 'date'],
+        $request->validate([
+            'from_date' => 'required|date',
+            'to_date' => 'required|date|after_or_equal:from_date',
         ]);
 
-        DB::beginTransaction();
+        return DB::transaction(function () use ($request) {
+            $deletedCount = Archive::query()
+                ->whereDate('created_at', '>=', $request->from_date)
+                ->whereDate('created_at', '<=', $request->to_date)
+                ->delete();
 
-        try {
-            $query = Archive::whereDate(
-                'created_at',
-                '>=',
-                $validated['from_date']
-            )->whereDate(
-                'created_at',
-                '<=',
-                $validated['to_date']
-            );
-
-            $count = $query->count();
-
-            if ($count === 0) {
-                DB::rollBack();
-
+            if ($deletedCount === 0) {
                 return response()->json([
                     'status' => 'warning',
                     'message' => 'هیچ رکوردی در این بازه زمانی یافت نشد.',
+                    'deleted_count' => 0,
                 ], 404);
             }
 
-            $query->delete();
-
-            DB::commit();
-
             return response()->json([
                 'status' => 'success',
-                'message' => "تعداد {$count} رکورد حذف شد.",
+                'message' => "تعداد {$deletedCount} رکورد با موفقیت حذف شد.",
+                'deleted_count' => $deletedCount,
             ]);
-        } catch (\Throwable $exception) {
-            DB::rollBack();
-
-            return response()->json([
-                'status' => 'error',
-                'message' => $exception->getMessage(),
-            ], 500);
-        }
+        });
     }
 }
