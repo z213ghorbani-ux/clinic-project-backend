@@ -3,13 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Models\Archive;
+use App\Models\Doctor;
+use App\Services\SignatureStampService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 
 class ArchiveController extends Controller
 {
-    // ثبت پرونده جوابدهی جدید (چند خدمت + فایل‌های پیوست)
+    protected SignatureStampService $stampService;
+
+    public function __construct(SignatureStampService $stampService)
+    {
+        $this->stampService = $stampService;
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -18,26 +26,42 @@ class ArchiveController extends Controller
             'file_number'    => 'nullable|string|max:50',
             'mobile'         => 'nullable|string|max:20',
             'issued_at'      => 'required|date',
-            'form_data'      => 'nullable', // می‌تواند رشته JSON یا آرایه باشد
+            'form_data'      => 'nullable',
             'files'          => 'nullable|array',
-            'files.*'        => 'file|max:20480', // حداکثر 20 مگابایت برای هر فایل
+            'files.*'        => 'file|max:20480',
+            'file_doctors'   => 'nullable|array', // شناسه پزشک برای هر فایل به ترتیب
+            'file_doctors.*' => 'nullable|integer',
         ]);
 
-        // ذخیره فایل‌های پیوست در استوریج عمومی
+        $fileDoctors = $request->input('file_doctors', []);
         $attachmentPaths = [];
+
         if ($request->hasFile('files')) {
-            foreach ($request->file('files') as $file) {
-                $path = $file->store('archives/' . $validated['national_code'], 'public');
+            $files = $request->file('files');
+            foreach ($files as $index => $file) {
+                // دریافت دکتری که برای این فایل انتخاب شده
+                $doctorId = $fileDoctors[$index] ?? null;
+                $stampPath = null;
+
+                if ($doctorId) {
+                    $doctor = Doctor::find($doctorId);
+                    $stampPath = $doctor?->stamp_path;
+                }
+
+                // اعمال مهر و ذخیره در استوریج
+                $saveDirectory = 'archives/' . $validated['national_code'];
+                $path = $this->stampService->applyStampAndSave($file, $stampPath, $saveDirectory);
+
                 $attachmentPaths[] = [
                     'original_name' => $file->getClientOriginalName(),
                     'path'          => $path,
                     'mime_type'     => $file->getClientMimeType(),
-                    'size'          => $file->getSize(),
+                    'size'          => Storage::disk('public')->exists($path) ? Storage::disk('public')->size($path) : $file->getSize(),
+                    'doctor_id'     => $doctorId,
                 ];
             }
         }
 
-        // پردازش فرم داده (خدمات انجام‌شده، مبالغ، توضیحات)
         $formData = $request->input('form_data');
         if (is_string($formData)) {
             $formData = json_decode($formData, true);
@@ -58,12 +82,11 @@ class ArchiveController extends Controller
         ]);
 
         return response()->json([
-            'message' => 'پرونده جوابدهی با موفقیت در سیستم بایگانی و ذخیره شد.',
+            'message' => 'پرونده جوابدهی با موفقیت در سیستم بایگانی و ممهور شد.',
             'data'    => $archive,
         ], 201);
     }
 
-    // لیست با فیلتر از تاریخ / تا تاریخ و جستجو
     public function index(Request $request)
     {
         $query = Archive::query();
@@ -92,13 +115,11 @@ class ArchiveController extends Controller
         );
     }
 
-    // مشاهده جزئیات یک رکورد
     public function show(Archive $archive)
     {
         return response()->json($archive);
     }
 
-    // حذف یک رکورد
     public function destroy(Archive $archive)
     {
         if ($archive->attachments) {
@@ -123,7 +144,6 @@ class ArchiveController extends Controller
         ]);
     }
 
-    // حذف گروهی بر اساس بازه تاریخ
     public function bulkDelete(Request $request)
     {
         $request->validate([
@@ -158,7 +178,6 @@ class ArchiveController extends Controller
         ]);
     }
 
-    // دانلود فایل پیوست
     public function downloadAttachment(Archive $archive, $index)
     {
         $paths = is_array($archive->attachments)
