@@ -18,6 +18,7 @@ class Doctor extends Model
         'name',
         'medical_council_code',
         'specialty',
+        'medical_code', 
         'mobile',
         'stamp_path',
         'is_active',
