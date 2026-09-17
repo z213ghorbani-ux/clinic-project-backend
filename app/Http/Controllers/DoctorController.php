@@ -86,7 +86,7 @@ class DoctorController extends Controller
 
             if ($file) {
                 $path = $file->store('doctors/stamps', 'public');
-                $stampPath = '/storage/' . $path;
+                $stampPath = $path; // به جای '/storage/' . $path
             }
 
             // استخراج کد نظام پزشکی از هر کلیدی که فرانت ارسال کند
@@ -192,7 +192,7 @@ class DoctorController extends Controller
                     }
                 }
                 $path = $file->store('doctors/stamps', 'public');
-                $validated['stamp_path'] = '/storage/' . $path;
+                $validated['stamp_path'] = $path; // به جای '/storage/' . $path
             }
 
             // همگام‌سازی کد نظام پزشکی
